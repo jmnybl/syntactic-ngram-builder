@@ -65,6 +65,8 @@ class FileReader():
         #Signal end of work to all processes (Thanks @radimrehurek and @fginter for this neat trick!)
         for _ in range(processes):
             self.queue.put(None)
+        print >> sys.stderr, "File reader ready, returning"
+        return
 
     def read_file(self,fName):
         """ Reads one .gz file and puts sentences into queue. """
@@ -103,12 +105,11 @@ class FileReader():
 
 class DBWriter():
 
-    def __init__(self,queue,out_dir,dataset,processes):
+    def __init__(self,queue,out_dir,dataset):
         self.dataset=dataset
         self.queue=queue
         self.outdir=out_dir
         self.DB,self.batch=self.createDB(dataset)
-        self.processes=processes
 
 
     def createDB(self,dataset):
@@ -121,29 +122,26 @@ class DBWriter():
         while True:
             ngram_list=self.queue.get() # fetch new batch
             if not ngram_list: # end signal
-                self.processes-=1
-                if self.processes==0: # end signal received from all builder processes
-                    print >> sys.stderr, "no new data in "+self.dataset+", creating final text file"
-                    sys.stderr.flush()
-                    try:
-                        c=self.create_final_files()
-                    except:
-                        print >> sys.stderr, "error while creating final text file: "+self.dataset
-                        sys.stderr.flush()
-                        return
-                    print >> sys.stderr, c,self.dataset,"written"
+                print >> sys.stderr, "no new data in "+self.dataset+", creating final text file"
+                sys.stderr.flush()
+                try:
+                    c=self.create_final_files() # create .gz text file
+                except:
+                    print >> sys.stderr, "error while creating final text file: "+self.dataset+" ,returning"
                     sys.stderr.flush()
                     return
-
+                print >> sys.stderr, c,self.dataset,"written, returning"
+                sys.stderr.flush()
+                return
             try:
-                batch=leveldb.WriteBatch()
+                batch=leveldb.WriteBatch() # write new batch
                 for ngram in ngram_list:
                     batch.Put(ngram.encode(u"utf-8"),u"1".encode(u"utf-8"))
                 self.DB.Write(batch)
             except:
                 print >> sys.stderr, "error in database writer, batch rejected: "+self.dataset
                 traceback.print_exc()
-                sys.stderr.flush()
+                sys.stderr.flush()      
 
 
     def create_final_files(self):

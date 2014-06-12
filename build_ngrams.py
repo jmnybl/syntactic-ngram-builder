@@ -21,7 +21,8 @@ def launch(args):
         #    os.system("rm -rf "+args.output+"/"+d+".leveldb")
         #    os.system("rm -rf "+args.output+"/"+d+".gz")
 
-    
+
+    procs=[] # gather all processes together
 
     ## gz file queue
     data_q=multiprocessing.Queue(args.processes*2) # max items in a queue at a time
@@ -30,6 +31,7 @@ def launch(args):
     reader=FileReader(data_q,50)
     readerProcess=multiprocessing.Process(target=reader.read, args=(args.input[0],args.processes))
     readerProcess.start()
+    procs.append(readerProcess)
 
     ## ngram queues, separate queue for each dataset
     ngram_queues={}
@@ -38,17 +40,32 @@ def launch(args):
 
     ## ngram builder processes (parallel)
     print >> sys.stderr, "Launching",args.processes,"ngram builder processes"
-    for num in xrange(0,args.processes):
+    for _ in range(args.processes):
         builder=SyntaxNgramBuilder(data_q,ngram_queues,data) # TODO do something smarter with 'data'
         builderProcess=multiprocessing.Process(target=builder.run)
         builderProcess.start()
-    
+        procs.append(builderProcess)
+  
+    w_procs=[]
+  
     ## separate database writer for each dataset
     print >> sys.stderr, "Launching",len(data),"database writer processes"
     for d in data:
-        writer=DBWriter(ngram_queues[d],args.output,d,args.processes)
+        writer=DBWriter(ngram_queues[d],args.output,d)
         writerProcess=multiprocessing.Process(target=writer.run)
-        writerProcess.start() 
+        writerProcess.start()
+        w_procs.append(writerProcess)
+
+    for p in procs:
+        p.join() # wait reader and builder processes to quit
+    
+    # now reader and builders are ready
+    # send end signal for each DB writer (Thanks @radimrehurek and @fginter for this neat trick!)
+    for dataset in data:
+        ngram_queues[dataset].put(None)
+
+    for p in w_procs:
+        p.join() # and wait
 
 
 if __name__==u"__main__":

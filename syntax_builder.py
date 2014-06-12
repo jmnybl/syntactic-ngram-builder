@@ -160,9 +160,11 @@ class SyntaxNgramBuilder():
             sentences=self.queueIN.get() # fetch a list of sentences from queue
             if not sentences: # end signal
                 for key,val in self.db_batches.iteritems(): # send last batches
-                    self.out_queues[key].put(val)
-                    self.out_queues[key].put(None) # send end signal for each database writer process
-                print >> sys.stderr, "builder process ending"
+                    if val:
+                        self.out_queues[key].put(val)             
+#                for d in self.datasets:
+#                    self.out_queues[d].put(None) # send end signal for each database writer process
+                print >> sys.stderr, "builder process ending, returning"
                 return
             for sent in sentences:
                 try:
