@@ -5,10 +5,10 @@ import os
 import sys
 
 from file_io import TarReader, DBWriter, FileReader
-from syntax_builder import SyntaxNgramBuilder
+from syntax_builder import NgramBuilder, ArgBuilder
             
 
-def launch(args):
+def launch_ngrams(args):
 
     data=u"nodes arcs biarcs triarcs".split()    
 
@@ -24,11 +24,11 @@ def launch(args):
 
     procs=[] # gather all processes together
 
-    ## gz file queue
+    ## data queue
     data_q=multiprocessing.Queue(args.processes*2) # max items in a queue at a time
 
-    ## file reader process (just one) TODO: read also tar, sample size
-    reader=FileReader(data_q,50)
+    ## file reader process (just one) to populate data queue TODO: read also tar
+    reader=FileReader(data_q,50) # number of sentences per one batch
     readerProcess=multiprocessing.Process(target=reader.read, args=(args.input[0],args.processes))
     readerProcess.start()
     procs.append(readerProcess)
@@ -41,7 +41,7 @@ def launch(args):
     ## ngram builder processes (parallel)
     print >> sys.stderr, "Launching",args.processes,"ngram builder processes"
     for _ in range(args.processes):
-        builder=SyntaxNgramBuilder(data_q,ngram_queues,data) # TODO do something smarter with 'data'
+        builder=NgramBuilder(data_q,ngram_queues,data) # TODO do something smarter with 'data'
         builderProcess=multiprocessing.Process(target=builder.run)
         builderProcess.start()
         procs.append(builderProcess)
@@ -57,12 +57,71 @@ def launch(args):
         w_procs.append(writerProcess)
 
     for p in procs:
-        p.join() # wait reader and builder processes to quit
+        p.join() # wait reader and builder processes to quit before continuing
     
-    # now reader and builders are ready
     # send end signal for each DB writer (Thanks @radimrehurek and @fginter for this neat trick!)
     for dataset in data:
         ngram_queues[dataset].put(None)
+
+    for p in w_procs:
+        p.join() # and wait
+
+def launch_args(args):
+
+    data=u"nodes arcs biarcs triarcs".split()    
+
+    # if output directory does not exist, create it
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+    else: # delete old databases ?
+        pass
+        #for d in data:
+        #    os.system("rm -rf "+args.output+"/"+d+".leveldb")
+        #    os.system("rm -rf "+args.output+"/"+d+".gz")
+
+
+    procs=[] # gather all processes together
+
+    ## data queue
+    data_q=multiprocessing.Queue(args.processes*2) # max items in a queue at a time
+
+    ## file reader process (just one) to populate data queue TODO: read also tar
+    reader=FileReader(data_q,50) # number of sentences per one batch
+    readerProcess=multiprocessing.Process(target=reader.read, args=(args.input[0],args.processes))
+    readerProcess.start()
+    procs.append(readerProcess)
+
+    ## args queues
+    verb_q=multiprocessing.Queue(15) # max items in a queue at a time
+    noun_q=multiprocessing.Queue(15)
+
+    ## builder processes (parallel)
+    print >> sys.stderr, "Launching",args.processes,"args builder processes"
+    for _ in range(args.processes):
+        builder=ArgBuilder(data_q,verb_q,noun_q)
+        builderProcess=multiprocessing.Process(target=builder.build)
+        builderProcess.start()
+        procs.append(builderProcess)
+  
+    w_procs=[]
+  
+    ## separate database writer for each dataset
+    print >> sys.stderr, "Launching 2 database writer processes"
+    writer=DBWriter(verb_q,args.output,"verb_args")
+    writerProcess=multiprocessing.Process(target=writer.run)
+    writerProcess.start()
+    w_procs.append(writerProcess)
+    writer=DBWriter(noun_q,args.output,"noun_args")
+    writerProcess=multiprocessing.Process(target=writer.run)
+    writerProcess.start()
+    w_procs.append(writerProcess)
+
+    for p in procs:
+        p.join() # wait reader and builder processes to quit before continuing
+    
+    # send end signal for each DB writer (Thanks @radimrehurek and @fginter for this neat trick!)
+    verb_q.put(None)
+    noun_q.put(None)
 
     for p in w_procs:
         p.join() # and wait
@@ -72,15 +131,21 @@ if __name__==u"__main__":
 
     parser = argparse.ArgumentParser(description='Build syntactic ngrams in a multi-core setting.')
     g=parser.add_argument_group("Input/Output")
-    g.add_argument('input', nargs=1, help='Name of the input dir.')
+    g.add_argument('input', nargs=1, help='Name of the input dir or file. Supported formats are .gz and .conll files (using CoNLL09 format)')
     g.add_argument('-o', '--output', required=True, help='Name of the output dir.')
     g=parser.add_argument_group("Builder config")
     g.add_argument('-p', '--processes', type=int, default=4, help='How many builder processes to run? (default %(default)d)')
-    #g.add_argument('--max_sent', type=int, default=0, help='How many sentences to read from the input? 0 for all.  (default %(default)d)')
+    g.add_argument('--ngrams', default=False, action="store_true", help='Build syntactic ngrams (nodes--quadarcs) (default %(default)s)')
+    g.add_argument('--args', default=False, action="store_true", help='Build syntactic args (verb and noun args) (default %(default)s)')
     args = parser.parse_args()
 
-    
-    launch(args)
+    if args.ngrams:
+        launch_ngrams(args)
+    elif args.args:
+        launch_args(args)
+    else:
+        print >> sys.stderr, "Use either --ngrams (for syntactic ngrams ) or --args (for verb and noun args)."
+        sys.exit(1)
 
     # TODO:
     # - add command line argument for data sets

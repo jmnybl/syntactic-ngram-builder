@@ -7,7 +7,7 @@ import traceback
 import sys
 import os.path
 
-class TarReader():
+class TarReader(object):
 
     def __init__(self,queue,fName,sample=None):
         self.queue=queue
@@ -45,7 +45,7 @@ class TarReader():
 
 
 
-class FileReader():
+class FileReader(object):
 
     def __init__(self,queue,batch_size):
         self.queue=queue
@@ -103,7 +103,7 @@ class FileReader():
                 yield sent
 
 
-class DBWriter():
+class DBWriter(object):
 
     def __init__(self,queue,out_dir,dataset):
         self.dataset=dataset

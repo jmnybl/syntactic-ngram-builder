@@ -11,6 +11,7 @@ import cStringIO as stringIO
 import gzip
 
 from graph import Graph
+from graph import CoNLLFormat, formats
 
 
 inf=666 # integer to represent "infinity"
@@ -33,8 +34,10 @@ ext_inc=u"cc".split()
 ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
 
 
-class SyntaxNgramBuilder():
-    """ Class to build Google Syntax Ngrams from Conll format trees. """
+class NgramBuilder(object):
+    """ Class to build syntactic ngrams. Following the same format as in: 
+        http://commondatastorage.googleapis.com/books/syntactic-ngrams/index.html
+    """
 
     def __init__(self,queueIN,queuesOUT,data):
         self.queueIN=queueIN
@@ -162,8 +165,6 @@ class SyntaxNgramBuilder():
                 for key,val in self.db_batches.iteritems(): # send last batches
                     if val:
                         self.out_queues[key].put(val)             
-#                for d in self.datasets:
-#                    self.out_queues[d].put(None) # send end signal for each database writer process
                 print >> sys.stderr, "builder process ending, returning"
                 return
             for sent in sentences:
@@ -178,4 +179,99 @@ class SyntaxNgramBuilder():
                 if len(val)>1000:
                     self.out_queues[key].put(val)
                     self.db_batches[key]=[]
+
+
+class ArgBuilder(object):
+    """ Class to build verb and noun args. Following the same format as in: 
+        http://commondatastorage.googleapis.com/books/syntactic-ngrams/index.html
+    """
+
+    def __init__(self,in_q,verb_q,noun_q):
+        self.in_q=in_q
+        self.form=formats[u"conll09"] # TODO define this properly
+        self.verb_q=verb_q
+        self.noun_q=noun_q
+        self.treeCounter=0
+
+
+    def extract_ngram(self,root_idx,deps,sent):
+        """
+            root_idx - index of a ngram root token in the sentence
+            deps - dependents of a ngram root, (idx,dtype) list
+        """
+        deps.append((root_idx,None)) # add root to get correct word order
+        deps.sort() # sort this to get tokens in correct order
+        r=None # root index in ngram
+        for i in xrange(0,len(deps)):
+            if deps[i][0]==root_idx:
+                r=i+1
+                break
+        assert (r is not None)
+        root=None
+        tokens=[]
+        for idx,dtype in deps:
+            text,POS=sent[idx-1][self.form.FORM],sent[idx-1][self.form.POS]
+            if idx==root_idx: # this is root
+                root=text
+                govIndex=0
+                dtype=sent[root_idx-1][self.form.DEPREL]
+            else:
+                govIndex=r
+            s=u"/".join(i for i in [text,POS,dtype,unicode(govIndex)])
+            tokens.append(s)
+        return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999)) # unique identifier
+
+
+
+    def process_sent(self,sent):
+        """ Create all verb and noun args from one sentence. """
+        tree=collections.defaultdict(lambda:[]) # indexed with integers
+        v_args=[]
+        n_args=[]
+        for line in sent: # first create dictionary, key:token, value:list of its dependents
+            tok=int(line[self.form.ID])
+            govs=line[self.form.HEAD].split(u",")
+            deprels=line[self.form.DEPREL].split(u",")
+            for gov,deprel in zip(govs,deprels):
+                gov=int(gov)
+                if gov==0: # skip root
+                    continue
+                if sent[gov-1][self.form.POS]==u"V" or sent[gov-1][self.form.POS]==u"N": # yes, we want this one
+                    tree[gov].append((tok,deprel))
+        for root,dependents in tree.iteritems():
+            ngram=self.extract_ngram(root,dependents,sent) # create text ngram
+            if sent[root-1][self.form.POS]==u"V": # check where to store this one
+                v_args.append(ngram)
+            else:
+                n_args.append(ngram)
+        self.v_batch+=v_args
+        self.n_batch+=n_args
+            
+
+
+    def build(self):
+        """ Fetch data from queue send it forward. """
+        self.v_batch=[]
+        self.n_batch=[]
+        while True:
+            sentences=self.in_q.get() # fetch new sentences
+            if not sentences: # end signal, time to stop
+                if self.v_batch:
+                    self.verb_q.put(self.v_batch)
+                if self.n_batch:
+                    self.noun_q.put(self.n_batch)
+                print >> sys.stderr, "no new data, arg builder ends"
+                return
+            for sent in sentences:
+                self.process_sent(sent)
+                self.treeCounter+=1
+            if len(self.v_batch)>100: # add batches to the queue
+                self.verb_q.put(self.v_batch)
+                self.v_batch=[]
+            if len(self.n_batch)>100:
+                self.noun_q.put(self.n_batch)
+                self.n_batch=[]
+
+
+
 
