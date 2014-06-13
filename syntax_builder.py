@@ -264,8 +264,12 @@ class ArgBuilder(object):
                 return
             for sent in sentences:
                 if len(sent)>1: # no need to process sentences with lenght 1
-                    self.process_sent(sent)
-                    self.treeCounter+=1
+                    try:
+                        self.process_sent(sent)
+                        self.treeCounter+=1
+                    except:
+                        traceback.print_exc()
+                        sys.stderr.flush()
             if len(self.v_batch)>100: # add batches to the queue
                 self.verb_q.put(self.v_batch)
                 self.v_batch=[]
