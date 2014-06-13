@@ -51,7 +51,7 @@ def launch_ngrams(args):
     ## separate database writer for each dataset
     print >> sys.stderr, "Launching",len(data),"database writer processes"
     for d in data:
-        writer=DBWriter(ngram_queues[d],args.output,d)
+        writer=DBWriter(ngram_queues[d],args.output,d,args.cutoff)
         writerProcess=multiprocessing.Process(target=writer.run)
         writerProcess.start()
         w_procs.append(writerProcess)
@@ -107,11 +107,11 @@ def launch_args(args):
   
     ## separate database writer for each dataset
     print >> sys.stderr, "Launching 2 database writer processes"
-    writer=DBWriter(verb_q,args.output,"verb_args")
+    writer=DBWriter(verb_q,args.output,"verb_args",args.cutoff)
     writerProcess=multiprocessing.Process(target=writer.run)
     writerProcess.start()
     w_procs.append(writerProcess)
-    writer=DBWriter(noun_q,args.output,"noun_args")
+    writer=DBWriter(noun_q,args.output,"noun_args",args.cutoff)
     writerProcess=multiprocessing.Process(target=writer.run)
     writerProcess.start()
     w_procs.append(writerProcess)
@@ -135,13 +135,16 @@ if __name__==u"__main__":
     g.add_argument('-o', '--output', required=True, help='Name of the output dir.')
     g=parser.add_argument_group("Builder config")
     g.add_argument('-p', '--processes', type=int, default=4, help='How many builder processes to run? (default %(default)d)')
+    g.add_argument('--cutoff', type=int, default=2, help='Frequency threshold, how many times an ngram must occur to be included? (default %(default)d)')
     g.add_argument('--ngrams', default=False, action="store_true", help='Build syntactic ngrams (nodes--quadarcs) (default %(default)s)')
     g.add_argument('--args', default=False, action="store_true", help='Build syntactic args (verb and noun args) (default %(default)s)')
     args = parser.parse_args()
 
     if args.ngrams:
+        print >> sys.stderr, "Building ngrams with a cutoff of "+str(args.cutoff)
         launch_ngrams(args)
     elif args.args:
+        print >> sys.stderr, "Building verb and noun args with a cutoff of "+str(args.cutoff)
         launch_args(args)
     else:
         print >> sys.stderr, "Use either --ngrams (for syntactic ngrams ) or --args (for verb and noun args)."

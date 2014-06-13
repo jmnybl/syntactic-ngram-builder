@@ -60,6 +60,7 @@ class FileReader(object):
             files.sort()
             for fName in files:
                 self.read_file(fName)
+                break
         elif inp.endswith(u".gz") or inp.endswith(u".conll"): # inp is a gzip or conll file
             self.read_file(inp)
         else:
@@ -115,11 +116,12 @@ class FileReader(object):
 
 class DBWriter(object):
 
-    def __init__(self,queue,out_dir,dataset):
+    def __init__(self,queue,out_dir,dataset,cutoff):
         self.dataset=dataset
         self.queue=queue
         self.outdir=out_dir
         self.DB,self.batch=self.createDB(dataset)
+        self.cutoff=cutoff
 
 
     def createDB(self,dataset):
@@ -164,8 +166,9 @@ class DBWriter(object):
             key=unicode(key,u"utf-8")
             ngram,ident=key.rsplit(u".",1) # split ngram and identifier
             if last!=ngram and count>0:
-                f.write((last+u"\t"+unicode(count)+u"\t2014,"+unicode(count)+u"\n").encode(u"utf-8")) # write to the file
-                totalCounter+=1
+                if count>=self.cutoff:
+                    f.write((last+u"\t"+unicode(count)+u"\t2014,"+unicode(count)+u"\n").encode(u"utf-8")) # write to the file
+                    totalCounter+=1
                 last=ngram
                 count=1
             elif last is None:
@@ -174,7 +177,7 @@ class DBWriter(object):
             else:
                 count+=1
         else:
-            if count>0:
+            if count>0 and count>=self.cutoff:
                 f.write((last+u"\t"+unicode(count)+u"\t2014,"+unicode(count)+u"\n").encode(u"utf-8")) # write last one  
         f.close()
         return totalCounter
