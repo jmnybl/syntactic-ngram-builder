@@ -6,6 +6,8 @@ import cStringIO as stringIO
 import traceback
 import sys
 import os.path
+import glob
+import subprocess # needed for pigz
 
 class TarReader(object):
 
@@ -68,10 +70,18 @@ class FileReader(object):
         print >> sys.stderr, "File reader ready, returning"
         return
 
+    def readGzip(self,fName):
+        """ Uses multithreaded gzip implementation (pigz) to read gzipped files. """
+        p=subprocess.Popen(("pigz","--decompress","--to-stdout","--processes","2",fName),stdout=subprocess.PIPE,stdin=None,stderr=subprocess.PIPE)
+        return p.stdout
+
+
     def read_file(self,fName):
         """ Reads one .gz file and puts sentences into queue. """
+        print >> sys.stderr, fName
         if fName.endswith(u".gz"):
-            f=codecs.getreader("utf-8")(gzip.open(fName))
+            f=codecs.getreader("utf-8")(self.readGzip(fName))
+            # f=codecs.getreader("utf-8")(gzip.open(fName)) # TODO use this as a fallback
         else:
             f=codecs.open(fName,u"rt",u"utf-8")
         sentences=[]
