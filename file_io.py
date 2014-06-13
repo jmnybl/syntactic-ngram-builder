@@ -52,6 +52,7 @@ class FileReader(object):
     def __init__(self,queue,batch_size):
         self.queue=queue
         self.batch_size=batch_size
+        self.totalCount=0
 
     def read(self,inp,processes):
         """ inp can be one file or directory with multiple files. """
@@ -60,7 +61,6 @@ class FileReader(object):
             files.sort()
             for fName in files:
                 self.read_file(fName)
-                break
         elif inp.endswith(u".gz") or inp.endswith(u".conll"): # inp is a gzip or conll file
             self.read_file(inp)
         else:
@@ -69,6 +69,7 @@ class FileReader(object):
         for _ in range(processes):
             self.queue.put(None)
         print >> sys.stderr, "File reader ready, returning"
+        print >> sys.stderr, "Total number of sentences: "+str(self.totalCount)
         return
 
     def readGzip(self,fName):
@@ -88,6 +89,7 @@ class FileReader(object):
         sentences=[]
         for sent in self.read_conll(f):
             sentences.append(sent)
+            self.totalCount+=1
             if len(sentences)>self.batch_size:
                 self.queue.put(sentences)
                 sentences=[]
@@ -95,6 +97,7 @@ class FileReader(object):
             if sentences:
                 self.queue.put(sentences)
         f.close()
+        
 
 
     def read_conll(self,f):

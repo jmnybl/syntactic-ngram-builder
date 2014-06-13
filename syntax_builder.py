@@ -260,11 +260,12 @@ class ArgBuilder(object):
                     self.verb_q.put(self.v_batch)
                 if self.n_batch:
                     self.noun_q.put(self.n_batch)
-                print >> sys.stderr, "no new data, arg builder ends"
+                print >> sys.stderr, "no new data, "+str(self.treeCounter)+" sentences processed, arg builder ends"
                 return
             for sent in sentences:
-                self.process_sent(sent)
-                self.treeCounter+=1
+                if len(sent)>1: # no need to process sentences with lenght 1
+                    self.process_sent(sent)
+                    self.treeCounter+=1
             if len(self.v_batch)>100: # add batches to the queue
                 self.verb_q.put(self.v_batch)
                 self.v_batch=[]
