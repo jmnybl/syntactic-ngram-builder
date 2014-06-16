@@ -10,7 +10,7 @@ import sys
 import cStringIO as stringIO
 import gzip
 
-from graph import Graph
+from graph import Graph,ext_zero,ext_inc,ext_special
 from graph import CoNLLFormat, formats
 
 
@@ -27,11 +27,6 @@ u"extended-arcs":1,
 u"extended-biarcs":2,
 u"extended-triarcs":3,
 u"extended-quadarcs":4}
-
-# extended types
-ext_zero=u"prep".split() ## TODO Finnish types
-ext_inc=u"cc".split()
-ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
 
 
 class NgramBuilder(object):
@@ -182,8 +177,9 @@ class NgramBuilder(object):
 
 
 class ArgBuilder(object):
-    """ Class to build verb and noun args. Following the same format as in: 
+    """ Class to build verb and noun args. Following (almost) the same format as in: 
         http://commondatastorage.googleapis.com/books/syntactic-ngrams/index.html
+        Differences: include also puntuation
     """
 
     def __init__(self,in_q,verb_q,noun_q):
@@ -238,8 +234,15 @@ class ArgBuilder(object):
                     continue
                 if sent[gov-1][self.form.POS]==u"V" or sent[gov-1][self.form.POS]==u"N": # yes, we want this one
                     tree[gov].append((tok,deprel))
+        # now we need to take care of cases where the verb has same dependents listed there twice with different dtype (e.g. rels)
         for root,dependents in tree.iteritems():
-            ngram=self.extract_ngram(root,dependents,sent) # create text ngram
+            uniq_deps=list(set([d for d,t in dependents])) # now we have a list of uniq dependents
+            deps=[]
+            for dep in uniq_deps:
+                dtypes=u",".join(t for d,t in dependents if d==dep)
+                deps.append((dep,dtypes))
+            # now deps is a list of unique dependents populated with its dependency types
+            ngram=self.extract_ngram(root,deps,sent) # create text ngram
             if sent[root-1][self.form.POS]==u"V": # check where to store this one
                 v_args.append(ngram)
             else:

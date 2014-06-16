@@ -1,8 +1,8 @@
 from collections import namedtuple
 
 # extended types
-ext_zero=u"prep".split() ## TODO Finnish types
-ext_inc=u"cc".split()
+ext_zero=u"prep".split() ## we don't have these in Finnish
+ext_inc=u"cc adpos".split() ## adpos is always included because it's the Finnish version of prep
 ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
 
 CoNLLFormat=namedtuple("CoNLLFormat",["ID","FORM","LEMMA","POS","FEAT","HEAD","DEPREL"])
@@ -58,7 +58,7 @@ class Graph():
         # handle extended
         if (dType in ext_zero): # jump over these
             self.weights[(u,v)]=0
-        elif (dType in ext_inc): # never include these when creating the path
+        elif (dType in ext_inc): # never include these when creating the path, add separately
             self.weights[(u,v)]=66
         elif (dType in ext_special): # or these
             self.weights[(u,v)]=66
