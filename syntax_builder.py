@@ -103,21 +103,22 @@ class NgramBuilder(object):
 
 
 
-    def buildNgrams(self,graph,n,dataset,dist,next):
+    def buildNgrams(self,graph,n,dataset,dist,next): # TODO: we need to build bi- and trigrams at once, cause trigrams are 'expanded' bigrams...
         """ Build all ngrams of length n """
         ngrams=[]
         for u in xrange(0,len(graph.nodes)):
             for v in xrange(u+1,len(graph.nodes)): # we can treat this as a triangular matrix
-                if dist[u][v]==n:
+                if dist[u][v]==n: # TODO: take only if length is 2 
                     p=self.path(u,v,next)
                     p=p.split(u"-")
                     for i in xrange(0,len(p)): # convert into int
                         p[i]=int(p[i])
 #                    if dataset.startswith(u"ext"):
 #                        ngrams+=graph.giveExtended(p)
-                    text_ngram=self.create_text_from_path(p,graph)
+                    text_ngram=self.create_text_from_path(p,graph) # here we create all bigrams then
                     if text_ngram is not None:
                         ngrams.append(text_ngram)
+                    # TODO: and now it's time to expand bigrams with one dependency to get trigrams, collect a tree dictionary (key:token, value:all its dependents), then for each node in bigram, try to attach a new dependent, finally take a set of all expansions to get unique trigrams (index nodes with tree indexes)
         self.db_batches[dataset]+=ngrams
 
 
@@ -179,7 +180,9 @@ class NgramBuilder(object):
 class ArgBuilder(object):
     """ Class to build verb and noun args. Following (almost) the same format as in: 
         http://commondatastorage.googleapis.com/books/syntactic-ngrams/index.html
-        Differences: include also puntuation
+        Differences:
+        - include also puntuation
+        - include lemma and morphology for each token
     """
 
     def __init__(self,in_q,verb_q,noun_q):
@@ -206,14 +209,14 @@ class ArgBuilder(object):
         root=None
         tokens=[]
         for idx,dtype in deps:
-            text,POS=sent[idx-1][self.form.FORM],sent[idx-1][self.form.POS]
+            text,lemma,POS,feat=sent[idx-1][self.form.FORM].lower(),sent[idx-1][self.form.LEMMA].lower(),sent[idx-1][self.form.POS],sent[idx-1][self.form.FEAT] # take also lemma and morpho
             if idx==root_idx: # this is root
-                root=text
+                root=text.lower()
                 govIndex=0
-                dtype=sent[root_idx-1][self.form.DEPREL]
+                dtype=sent[root_idx-1][self.form.DEPREL] # take as is, may have multiple types but it does not matter
             else:
                 govIndex=r
-            s=u"/".join(i for i in [text,POS,dtype,unicode(govIndex)])
+            s=u"/".join(i for i in [text,lemma,POS,feat,dtype,unicode(govIndex)])
             tokens.append(s)
         return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999)) # unique identifier
 
@@ -226,7 +229,7 @@ class ArgBuilder(object):
         n_args=[]
         for line in sent: # first create dictionary, key:token, value:list of its dependents
             tok=int(line[self.form.ID])
-            govs=line[self.form.HEAD].split(u",")
+            govs=line[self.form.HEAD].split(u",") # this is for second layer
             deprels=line[self.form.DEPREL].split(u",")
             for gov,deprel in zip(govs,deprels):
                 gov=int(gov)
@@ -241,7 +244,7 @@ class ArgBuilder(object):
             for dep in uniq_deps:
                 dtypes=u",".join(t for d,t in dependents if d==dep)
                 deps.append((dep,dtypes))
-            # now deps is a list of unique dependents populated with its dependency types
+            # now deps is a list of unique dependents populated with dependency types
             ngram=self.extract_ngram(root,deps,sent) # create text ngram
             if sent[root-1][self.form.POS]==u"V": # check where to store this one
                 v_args.append(ngram)
