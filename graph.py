@@ -64,7 +64,7 @@ class Graph():
             self.weights[(u,v)]=66
         else:
             self.weights[(u,v)]=1
-        self.syntax[v]=(u,dType)
+        self.syntax[v]=(u,dType) # TODO: these needs to be lists
 #        self.deps[u].append((v,dType))
 
 
