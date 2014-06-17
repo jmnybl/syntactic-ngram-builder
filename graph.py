@@ -38,10 +38,11 @@ class Graph():
         """ Initialize empty, everything indexed as integers """
         self.nodes=[]
         self.edges=[]
-        self.weights={}
+        self.weights={} # TODO: do we need something extra for rels?
         self.pos=[]
-        self.syntax={}
-#        self.deps=collections.defaultdict(lambda:[])
+        self.govs=collections.defaultdict(lambda:[]) # key: token, value: list of its governors
+        self.deps=collections.defaultdict(lambda:[]) # key: token, value: list of dependents
+        seld.dTypes=collections.defaultdict(lambda:[]) # key: (gov,dep) tuple, value list of deptypes
 
 
     def addNode(self,node,pos):
@@ -64,29 +65,24 @@ class Graph():
             self.weights[(u,v)]=66
         else:
             self.weights[(u,v)]=1
-        self.syntax[v]=(u,dType) # TODO: these needs to be lists
-#        self.deps[u].append((v,dType))
+        self.govs[v].append(u)
+        self.deps[u].append(v)
+        self.dtypes[(u,v)].append(dType)
 
 
     def giveNode(self,node):
         try: ## TODO fix this, artificial root ?
-            gov,dep=self.syntax[node]
+            govs=self.govs[node]
         except KeyError:
-            gov,dep=666,u"ROOT"
-        return self.nodes[node],self.pos[node],gov,dep
+            gov,dep=666
+        return self.nodes[node],self.pos[node],gov
 
 
     def isEmpty(self):
         if len(self.nodes)>0: return False
         else: return True
 
-#    def giveExtended(self,path):
-#        ext=[]
-#        for p in path:
-#            for idx,dType in self.deps[p]:
-#                if dType in self.ext_special:
-#                    ext.append(idx)
-#        return ext
+
 
 
 

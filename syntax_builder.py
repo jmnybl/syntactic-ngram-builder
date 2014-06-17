@@ -83,46 +83,66 @@ class NgramBuilder(object):
         return dist,next
 
 
-    def create_text_from_path(self,path,graph):
+    def create_text_from_path(self,path,graph): # TODO: rels --> same path, different ngram (return list)
         """ Create a text format ngram from given graph and path. """
-        path.sort() # sort this to get tokens in correct order
         root=None
         tokens=[]
         for tok in path:
-            text,POS,gov,dType=graph.giveNode(tok)
-            if gov not in path:
-                if (dType in ext_zero) or (dType in ext_inc) or (dType in ext_special):
-                    return None # skip if root is a functional-marker
+            text,POS,govs=graph.giveNode(tok)
+            govs=set(govs)&set(path) # take only governors which are in this particular path, if more than one, then what?
+            if len(govs)==0: # this is root
                 root=text
                 govIndex=0
-            else:
-                govIndex=path.index(gov)+1
+                # if (dType in ext_zero) or (dType in ext_inc) or (dType in ext_special): # TODO: do I need this?
+                #    return None # skip if root is a functional-marker
+                root=text
+                govIndex=0
+            if len(govs)==1:
+                gov=govs[0]
+                dType=graph.dtypes((gov,tok))
+            else: # TODO: multiple roots, split?
+                pass
+                #govIndex=path.index(gov)+1
             s=u"/".join(i for i in [text,POS,dType,unicode(govIndex)])
             tokens.append(s)
         return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999)) # TODO unique identifier
 
 
 
-    def buildNgrams(self,graph,n,dataset,dist,next): # TODO: we need to build bi- and trigrams at once, cause trigrams are 'expanded' bigrams...
-        """ Build all ngrams of length n """
-        ngrams=[]
+    def buildNgrams(self,graph,dist,next):
+        """ Build all ngrams of length biarcs to quadarcs"""
+        biarcs=set()
         for u in xrange(0,len(graph.nodes)):
             for v in xrange(u+1,len(graph.nodes)): # we can treat this as a triangular matrix
-                if dist[u][v]==n: # TODO: take only if length is 2 
+                if dist[u][v]==2: # take all biarcs
                     p=self.path(u,v,next)
                     p=p.split(u"-")
                     for i in xrange(0,len(p)): # convert into int
                         p[i]=int(p[i])
-#                    if dataset.startswith(u"ext"):
-#                        ngrams+=graph.giveExtended(p)
-                    text_ngram=self.create_text_from_path(p,graph) # here we create all bigrams then
-                    if text_ngram is not None:
-                        ngrams.append(text_ngram)
-                    # TODO: and now it's time to expand bigrams with one dependency to get trigrams, collect a tree dictionary (key:token, value:all its dependents), then for each node in bigram, try to attach a new dependent, finally take a set of all expansions to get unique trigrams (index nodes with tree indexes)
-        self.db_batches[dataset]+=ngrams
+                    path.sort() # to keep these unique and to get words in correct order
+                    biarcs.add(path) # store path
+        ngrams=[] # needs to be list because we can have same arc twice in the same sentence
+        for path in biarcs: # TODO: extended
+            ngrams.append(self.create_text_from_path(p,graph)) # convert path into text
+        self.db_batches["biarcs"]+=ngrams
+        # now gather triarcs
+        triarcs=set()
+        for biarc in biarcs:
+            # check the shape, if two dependents, try to attach third one
+            # if chain, try to expand every token
+            for token in biarc: # token is a int index
+                deps=graph.deps[token]
+                for dep in deps: # no need to check if this is already included since we work with set
+                    triarcs.add(biarc[:].append(dep).sort()) # add new dep and sort path
+        # now we have all triarc paths, create text
+        ngrams=[]
+        for path in triarcs: # TODO: extended
+            ngrams.append(self.create_text_from_path(p,graph))
+        self.db_batches["triarcs"]+=ngrams
+        # TODO: quadarcs
 
 
-    def create_nodes(self,dataset,graph):
+    def create_nodes(self,graph):
         ngrams=[]
         for i in xrange(0, len(graph.nodes)):
             p=[i]
@@ -131,17 +151,13 @@ class NgramBuilder(object):
             text_ngram=self.create_text_from_path(p,graph)
             if text_ngram is not None:
                 ngrams.append(text_ngram)
-        self.db_batches[dataset]+=ngrams   
+        self.db_batches[u"nodes"]+=ngrams   # TODO: extended nodes
 
 
     def processGraph(self,graph):
         dist,next=self.floydWarshall(graph)
-        for data in self.datasets:
-            if data==u"nodes" or data==u"extended-nodes":
-                self.create_nodes(data,graph)
-            else:
-                n=self.datasets[data]
-                self.buildNgrams(graph,n,data,dist,next)
+        self.create_nodes(data,graph) # create nodes
+        self.buildNgrams(graph,dist,next) # create biarcs--quadarcs
 
 
 
