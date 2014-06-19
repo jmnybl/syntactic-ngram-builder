@@ -10,23 +10,13 @@ import sys
 import cStringIO as stringIO
 import gzip
 
-from graph import Graph,ext_zero,ext_inc,ext_special
+from graph import Graph,ext_zero,ext_inc,ext_special,Dependency
 from graph import CoNLLFormat, formats
 
 
 inf=666 # integer to represent "infinity"
 
-data_table={
-u"nodes":0,
-u"arcs":1,
-u"biarcs":2,
-u"triarcs":3,
-u"quadarcs":4,
-u"extended-nodes":0,
-u"extended-arcs":1,
-u"extended-biarcs":2,
-u"extended-triarcs":3,
-u"extended-quadarcs":4}
+
 
 
 class NgramBuilder(object):
@@ -36,140 +26,115 @@ class NgramBuilder(object):
 
     def __init__(self,queueIN,queuesOUT,data):
         self.queueIN=queueIN
-        self.out_queues=queuesOUT
-        self.datasets={} # key: dataset_name, value: n
-        for d in data:
-            self.datasets[d]=data_table[d]
+        self.out_queues=queuesOUT # dict
         self.treeCounter=0
 
 
-    def path(self,i,j,next):
-        """ Reconstruct the shortest path between i and j. """
-        if i==j:
-            return str(i) # TODO format
-        if next[i][j]==-1:
-            raise NameError("No path between i and j.")
-        intermediate=next[i][j]
-        return self.path(i,intermediate,next) + "-"+str(j) # TODO format
-
-
-    def floydWarshall(self, graph):
-        """ Floyd-Warshall algorithm to find all-pairs shortest paths. """
-        size=len(graph.nodes)    
-        # init dist array
-        dist=numpy.empty([size,size],dtype=int)
-        dist.fill(inf)
-        for i in xrange(0,size):
-            dist[i][i]=0
-        for u,v in graph.edges:
-            dist[u][v]=graph.weights[(u,v)]  # the weight of the edge (u,v)
-            dist[v][u]=graph.weights[(u,v)]  # this will treat the graph as undirected
-        # init next array
-        next=numpy.empty([size,size],dtype=int)
-        next.fill(inf)
-        for i in xrange(0, size):
-            for j in xrange(0, size):
-                if i==j or dist[i][j]==inf:
-                    next[i][j]=-1
-                else:
-                    next[i][j]=i
-        for k in xrange(0, size):
-            for i in xrange(0, size):
-                for j in xrange(0, size):
-                    if dist[i][j]>dist[i][k]+dist[k][j]:
-                        dist[i][j]=dist[i][k]+dist[k][j]
-                        next[i][j]=next[k][j]
-
-        return dist,next
-
-
-    def create_text_from_path(self,path,graph): # TODO: rels --> same path, different ngram (return list)
-        """ Create a text format ngram from given graph and path. """
+    def create_text_from_path(self,path,graph):
+        """ Create a text format ngram from given graph and path.
+            Path is a list of dependencys.
+        """
         root=None
         tokens=[]
+        last=None # dep idx
+        deps=[] # list of (govIndex,dtype) tuples
         for tok in path:
-            text,POS,govs=graph.giveNode(tok)
-            govs=set(govs)&set(path) # take only governors which are in this particular path, if more than one, then what?
-            if len(govs)==0: # this is root
-                root=text
+            if (last is not None) and (last!=tok.dep): # last is ready, save
+                text,morpho=graph.giveNode(last) # morpho=(lemma,pos,feat)
+                lemma,pos,feat=morpho
+                govs=u",".join(str(d[0]) for d in deps)
+                deprels=u",".join(d[1] for d in deps)
+                s=u"/".join(i for i in [text,lemma,pos,feat,deprels,govs])
+                tokens.append(s)
+                last=None
+                deps=[]
+            if tok.gov==-1: # this is root
+                root=graph.nodes[tok.dep]
                 govIndex=0
-                # if (dType in ext_zero) or (dType in ext_inc) or (dType in ext_special): # TODO: do I need this?
-                #    return None # skip if root is a functional-marker
-                root=text
-                govIndex=0
-            if len(govs)==1:
-                gov=govs[0]
-                dType=graph.dtypes((gov,tok))
-            else: # TODO: multiple roots, split?
-                pass
-                #govIndex=path.index(gov)+1
-            s=u"/".join(i for i in [text,POS,dType,unicode(govIndex)])
-            tokens.append(s)
-        return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999)) # TODO unique identifier
+            else:
+                govIndex=None # TODO: not efficient!
+                for i in xrange(len(path)):
+                    if path[i].dep==tok.gov:
+                        govIndex=i+1
+                        break
+                if govIndex is None:
+                    raise KeyError
+            if last is None:
+                last=tok.dep
+            deps.append((govIndex,tok.type))
+        else:
+            if last:
+                text,morpho=graph.giveNode(last)
+                lemma,pos,feat=morpho
+                govs=u",".join(str(d[0]) for d in deps)
+                deprels=u",".join(d[1] for d in deps)
+                s=u"/".join(i for i in [text,lemma,pos,feat,deprels,govs])
+                tokens.append(s)  
+        return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999))
 
 
+    def expand_by_one(self,arcs,graph):
+        """ For a set of unique arcs try to add one more dependency.
+            Arcs is a set of dependency lists.
+        """
+        exp_arcs=set()
+        for arc in arcs: # now arc is a list of dependencies, sorted because of comparison
+            arc=list(arc) # now arc is a list again
+            tokens=set([d.gov for d in arc if d.gov!=-1])
+            tokens|=set([d.dep for d in arc if d.dep!=-1]) # collect all tokens from this arc except root
+            for tok in tokens: # ...for each token in this arc
+                # try to attach one dependency which is not part of arc
+                dependencies=graph.deps[tok] # all dependents of this particular token
+                for dep in dependencies: # TODO: functional markers
+                    if dep not in arc: # not part of arc
+                        new_arc=arc[:]
+                        new_arc.append(dep)
+                        new_arc.sort()
+                        exp_arcs.add(tuple(new_arc))
+        return exp_arcs
+                
 
-    def buildNgrams(self,graph,dist,next):
+    def buildNgrams(self,graph):
         """ Build all ngrams of length biarcs to quadarcs"""
-        biarcs=set()
-        for u in xrange(0,len(graph.nodes)):
-            for v in xrange(u+1,len(graph.nodes)): # we can treat this as a triangular matrix
-                if dist[u][v]==2: # take all biarcs
-                    p=self.path(u,v,next)
-                    p=p.split(u"-")
-                    for i in xrange(0,len(p)): # convert into int
-                        p[i]=int(p[i])
-                    path.sort() # to keep these unique and to get words in correct order
-                    biarcs.add(path) # store path
-        ngrams=[] # needs to be list because we can have same arc twice in the same sentence
-        for path in biarcs: # TODO: extended
-            ngrams.append(self.create_text_from_path(p,graph)) # convert path into text
-        self.db_batches["biarcs"]+=ngrams
-        # now gather triarcs
-        triarcs=set()
-        for biarc in biarcs:
-            # check the shape, if two dependents, try to attach third one
-            # if chain, try to expand every token
-            for token in biarc: # token is a int index
-                deps=graph.deps[token]
-                for dep in deps: # no need to check if this is already included since we work with set
-                    triarcs.add(biarc[:].append(dep).sort()) # add new dep and sort path
-        # now we have all triarc paths, create text
+        arcs=set()
+        for idx in range(len(graph.nodes)):
+            types=graph.govs[idx]
+            if not types: # this is a root token
+                l=[Dependency(-1,idx,u"ROOT")]
+                arcs.add(tuple(l))
+            else:
+                for d in types:
+                    if (d.type in ext_zero) or (d.type in ext_inc) or (d.type in ext_special): continue # filter out if dtype is one of those functional markers...
+                    l=[Dependency(-1,idx,d.type)]
+                    arcs.add(tuple(l))
         ngrams=[]
-        for path in triarcs: # TODO: extended
-            ngrams.append(self.create_text_from_path(p,graph))
-        self.db_batches["triarcs"]+=ngrams
+        for arc in arcs: # nodes
+            ngrams.append(self.create_text_from_path(arc,graph))
+        self.db_batches[u"nodes"]+=ngrams
+#        for n in ngrams:
+#            print "node:", n
+        for data in [u"arcs",u"biarcs",u"triarcs"]: # arcs---quadarcs
+            ngrams=[]
+            arcs=self.expand_by_one(arcs,graph)
+            for arc in arcs:
+                ngrams.append(self.create_text_from_path(arc,graph))
+            self.db_batches[data]+=ngrams
+#            for n in ngrams:
+#                print data, n
         # TODO: quadarcs
-
-
-    def create_nodes(self,graph):
-        ngrams=[]
-        for i in xrange(0, len(graph.nodes)):
-            p=[i]
-#            if dataset.startswith(u"ext"):
-#                p+=graph.giveExtended(p)
-            text_ngram=self.create_text_from_path(p,graph)
-            if text_ngram is not None:
-                ngrams.append(text_ngram)
-        self.db_batches[u"nodes"]+=ngrams   # TODO: extended nodes
-
-
-    def processGraph(self,graph):
-        dist,next=self.floydWarshall(graph)
-        self.create_nodes(data,graph) # create nodes
-        self.buildNgrams(graph,dist,next) # create biarcs--quadarcs
+        
 
 
 
     def process_sentence(self,sent):
         """ Create ngrams from one sentence. """
         graph=Graph.create(sent) # create new graph representation
-        self.processGraph(graph)
+        self.buildNgrams(graph) # create nodes--quadarcs
 
 
     def run(self):
         self.db_batches={} # key:dataset, value: list of ngrams
-        for d in self.datasets:
+        for d in [u"nodes",u"arcs",u"biarcs",u"triarcs"]:
             self.db_batches[d]=[]
         while True:
             sentences=self.queueIN.get() # fetch a list of sentences from queue
@@ -179,13 +144,14 @@ class NgramBuilder(object):
                         self.out_queues[key].put(val)             
                 print >> sys.stderr, "builder process ending, returning"
                 return
-            for sent in sentences:
-                try:
-                    self.process_sentence(sent)
-                except:
-                    print >> sys.stderr, "error in processing sentence"
-                    traceback.print_exc()
-                    sys.stderr.flush()
+            for sent in sentences: # TODO: filter out parsebank markers + empty sentences
+                #try:
+                #print ">>>>>>>", u" ".join(tok[1] for tok in sent), "<<<<<<<"
+                self.process_sentence(sent)
+                #except:
+                #    print >> sys.stderr, "error in processing sentence"
+                #    traceback.print_exc()
+                #    sys.stderr.flush()
                 self.treeCounter+=1 # this is needed for unique identifiers
             for key,val in self.db_batches.iteritems():
                 if len(val)>1000:

@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple,defaultdict
 
 # extended types
 ext_zero=u"prep".split() ## we don't have these in Finnish
@@ -9,7 +9,36 @@ CoNLLFormat=namedtuple("CoNLLFormat",["ID","FORM","LEMMA","POS","FEAT","HEAD","D
 #Column lists for the various formats
 formats={"conll09":CoNLLFormat(0,1,2,4,6,8,10)}
 
-class Graph():
+class Dependency(object):
+    """ Simple class to represent dependency. """
+
+    def __init__(self,g,d,t):
+        self.gov=g
+        self.dep=d
+        self.type=t
+
+    def __eq__(self,other):
+        return (self.gov==other.gov and self.dep==other.dep and self.type==other.type)
+
+    def __cmp__(self,other): # do I ever need to sort list of deps?
+        if self.dep<other.dep: return -1 # self smaller than other
+        elif self.dep>other.dep: return 1
+        else: # same gov
+            if self.gov<other.gov: return -1
+            elif self.gov>other.gov: return 1
+            else: # also same dep
+                if self.type<other.type: return -1
+                elif self.type>other.type: return 1
+                else: return -1 # the same, raise error?
+
+    def __hash__(self):
+        return hash(str(self.gov)+"-"+str(self.dep)+"-"+self.type)
+
+    def __repr__(self):
+        return (str(self.gov)+":"+str(self.dep)+":"+self.type)
+
+
+class Graph(object):
 
     @classmethod
     def init_ready(cls,n,e,d): # TODO do I ever need this?
@@ -25,57 +54,55 @@ class Graph():
         g=cls()
         form=formats[conll_format] #named tuple with the column indices
         for line in sent:
-            token=line[form.FORM].lower() # lowercase everything # TODO option to use lemmas
-            gov=int(line[form.HEAD])
-            g.addNode(token,line[form.POS]) # create a node to represent this token, store also pos TODO feat
-            if int(gov)==0:
-                continue
-            dtype=line[form.DEPREL] # dependency type
-            g.addEdge(gov-1,int(line[form.ID])-1,dtype) # TODO remove '-1'
+            token=line[form.FORM].lower() # lowercase everything
+            g.addNode(token,(line[form.LEMMA],line[form.POS],line[form.FEAT])) # create a node to represent this token, store also pos TODO lemma,feat
+            govs=line[form.HEAD].split(u",")
+            deprels=line[form.DEPREL].split(u",") # dependency types
+            for gov,deprel in zip(govs,deprels):
+                if int(gov)==0:
+                    continue
+                g.addEdge(int(gov)-1,int(line[form.ID])-1,deprel) # TODO remove '-1'
         return g
 
     def __init__(self):
         """ Initialize empty, everything indexed as integers """
         self.nodes=[]
         self.edges=[]
-        self.weights={} # TODO: do we need something extra for rels?
+        #self.weights={}
         self.pos=[]
-        self.govs=collections.defaultdict(lambda:[]) # key: token, value: list of its governors
-        self.deps=collections.defaultdict(lambda:[]) # key: token, value: list of dependents
-        seld.dTypes=collections.defaultdict(lambda:[]) # key: (gov,dep) tuple, value list of deptypes
+        self.govs=defaultdict(lambda:[]) # key: token, value: list of its governors
+        self.deps=defaultdict(lambda:[]) # key: token, value: list of dependents
+        self.dtypes=defaultdict(lambda:[]) # key: (gov,dep) tuple, value list of deptypes
 
 
-    def addNode(self,node,pos):
+    def addNode(self,node,morpho):
         self.nodes.append(node)
-        self.pos.append(pos)
+        self.pos.append(morpho)
 
 
-    def addEdge(self,u,v,dType):
+    def addEdge(self,u,v,dtype):
         """
         u - gov index
         v - dep index
         """
+        dep=Dependency(u,v,dtype)
         self.edges.append((u,v))
         # handle extended
-        if (dType in ext_zero): # jump over these
-            self.weights[(u,v)]=0
-        elif (dType in ext_inc): # never include these when creating the path, add separately
-            self.weights[(u,v)]=66
-        elif (dType in ext_special): # or these
-            self.weights[(u,v)]=66
-        else:
-            self.weights[(u,v)]=1
-        self.govs[v].append(u)
-        self.deps[u].append(v)
-        self.dtypes[(u,v)].append(dType)
+#        if (dtype in ext_zero): # jump over these
+#            self.weights[(u,v)]=0
+#        elif (dtype in ext_inc): # never include these when creating the path, add separately
+#            self.weights[(u,v)]=66
+#        elif (dtype in ext_special): # or these
+#            self.weights[(u,v)]=66
+#        else:
+#            self.weights[(u,v)]=1
+        self.govs[v].append(dep)
+        self.deps[u].append(dep)
+        self.dtypes[(u,v)].append(dtype)
 
 
     def giveNode(self,node):
-        try: ## TODO fix this, artificial root ?
-            govs=self.govs[node]
-        except KeyError:
-            gov,dep=666
-        return self.nodes[node],self.pos[node],gov
+        return self.nodes[node],self.pos[node]
 
 
     def isEmpty(self):
