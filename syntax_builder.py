@@ -14,10 +14,6 @@ from graph import Graph,ext_zero,ext_inc,ext_special,Dependency
 from graph import CoNLLFormat, formats
 
 
-inf=666 # integer to represent "infinity"
-
-
-
 
 class NgramBuilder(object):
     """ Class to build syntactic ngrams. Following the same format as in: 
@@ -72,6 +68,23 @@ class NgramBuilder(object):
                 tokens.append(s)  
         return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999))
 
+    def create_quadarcs(self,triarcs,graph):
+        quadarcs=set()
+        for arc,token in triarcs:
+            arc=list(arc)
+            tokens=set()
+            for d in arc:
+                tokens.add(d.dep)
+                tokens.add(d.gov)
+            deps=graph.deps[token]
+            for d in deps:
+                if d.dep not in tokens: # because we want only 'basic' quadarcs, allow this dep if d.dep not in path
+                    new_arc=arc[:]
+                    new_arc.append(d)
+                    new_arc.sort()
+                    quadarcs.add(tuple(new_arc))
+            
+        return quadarcs
 
     def expand_by_one(self,arcs,graph):
         """ For a set of unique arcs try to add one more dependency.
@@ -92,10 +105,40 @@ class NgramBuilder(object):
                         new_arc.sort()
                         exp_arcs.add(tuple(new_arc))
         return exp_arcs
+
+    def filter_triarcs(self,triarcs):
+        """ Filter the set of triarcs to have only those we need for building quadarcs. """
+        filtered=set()
+        for arc in triarcs:
+            arc=list(arc)
+            root=None
+            first=set()
+            sec=set()
+            sec_head=set()
+            for d in arc: # TODO: this is very unefficient way of doing this...
+                if d.gov==-1: # this is arc root
+                    root=d.dep
+            for d in arc:
+                if d.gov==-1:
+                    continue
+                if d.gov==root:
+                    first.add(d.dep)
+            for d in arc:
+                if d.gov==-1 or d.dep in first:
+                    continue
+                if d.gov in first: # can be only one of these
+                    sec.add(d.dep)
+                    sec_head.add(d.gov)
+                    break
+            if len(first)==2 and len(sec)==1: # this is what we want
+                token=first-sec_head
+                assert len(token)==1
+                filtered.add((tuple(arc),token.pop()))
+        return filtered
                 
 
     def buildNgrams(self,graph):
-        """ Build all ngrams of length biarcs to quadarcs"""
+        """ Build all ngrams of length biarcs to quadarcs. """
         arcs=set()
         for idx in range(len(graph.nodes)):
             types=graph.govs[idx]
@@ -119,9 +162,17 @@ class NgramBuilder(object):
             for arc in arcs:
                 ngrams.append(self.create_text_from_path(arc,graph))
             self.db_batches[data]+=ngrams
+            if data==u"triarcs": # use these to create quadarcs
+                filtered=self.filter_triarcs(arcs)
+                quadarcs=self.create_quadarcs(filtered,graph)
+                ngrams=[]
+                for arc in quadarcs:
+                    ngrams.append(self.create_text_from_path(arc,graph))
+#                for n in ngrams:
+#                    print n
+                self.db_batches[u"quadarcs"]+=ngrams
 #            for n in ngrams:
 #                print data, n
-        # TODO: quadarcs
         
 
 
@@ -134,7 +185,7 @@ class NgramBuilder(object):
 
     def run(self):
         self.db_batches={} # key:dataset, value: list of ngrams
-        for d in [u"nodes",u"arcs",u"biarcs",u"triarcs"]:
+        for d in [u"nodes",u"arcs",u"biarcs",u"triarcs",u"quadarcs"]:
             self.db_batches[d]=[]
         while True:
             sentences=self.queueIN.get() # fetch a list of sentences from queue
@@ -144,9 +195,11 @@ class NgramBuilder(object):
                         self.out_queues[key].put(val)             
                 print >> sys.stderr, "builder process ending, returning"
                 return
-            for sent in sentences: # TODO: filter out parsebank markers + empty sentences
+            for sent in sentences:
+                if sent[0][1].startswith(u"####FIPBANK"): continue # skip parsebank markers
+                if len(sent)==1 and sent[0][1]==u"": continue # skip whitespace sentences
                 #try:
-                #print ">>>>>>>", u" ".join(tok[1] for tok in sent), "<<<<<<<"
+                #print u" ".join(tok[1] for tok in sent)
                 self.process_sentence(sent)
                 #except:
                 #    print >> sys.stderr, "error in processing sentence"

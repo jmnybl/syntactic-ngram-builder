@@ -55,7 +55,7 @@ class Graph(object):
         form=formats[conll_format] #named tuple with the column indices
         for line in sent:
             token=line[form.FORM].lower() # lowercase everything
-            g.addNode(token,(line[form.LEMMA],line[form.POS],line[form.FEAT])) # create a node to represent this token, store also pos TODO lemma,feat
+            g.addNode(token,(line[form.LEMMA],line[form.POS],line[form.FEAT])) # create a node to represent this token, store also pos, lemma and feat
             govs=line[form.HEAD].split(u",")
             deprels=line[form.DEPREL].split(u",") # dependency types
             for gov,deprel in zip(govs,deprels):
@@ -87,15 +87,6 @@ class Graph(object):
         """
         dep=Dependency(u,v,dtype)
         self.edges.append((u,v))
-        # handle extended
-#        if (dtype in ext_zero): # jump over these
-#            self.weights[(u,v)]=0
-#        elif (dtype in ext_inc): # never include these when creating the path, add separately
-#            self.weights[(u,v)]=66
-#        elif (dtype in ext_special): # or these
-#            self.weights[(u,v)]=66
-#        else:
-#            self.weights[(u,v)]=1
         self.govs[v].append(dep)
         self.deps[u].append(dep)
         self.dtypes[(u,v)].append(dtype)

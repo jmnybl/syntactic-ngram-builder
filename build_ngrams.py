@@ -10,7 +10,7 @@ from syntax_builder import NgramBuilder, ArgBuilder
 
 def launch_ngrams(args):
 
-    data=u"nodes arcs biarcs triarcs".split()    
+    data=u"nodes arcs biarcs triarcs quadarcs".split()    
 
     # if output directory does not exist, create it
     if not os.path.exists(args.output):
@@ -68,7 +68,7 @@ def launch_ngrams(args):
 
 def launch_args(args):
 
-    data=u"nodes arcs biarcs triarcs".split()    
+    #data=u"nodes arcs biarcs triarcs quadarcs".split()    
 
     # if output directory does not exist, create it
     if not os.path.exists(args.output):
