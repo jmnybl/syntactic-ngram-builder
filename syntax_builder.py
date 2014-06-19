@@ -120,7 +120,7 @@ class NgramBuilder(object):
             for tok in tokens: # ...for each token in this arc
                 # try to attach one dependency which is not part of arc
                 dependencies=graph.deps[tok] # all dependents of this particular token
-                for dep in dependencies: # TODO: functional markers
+                for dep in dependencies:
                     if (dep.type in ext_zero) or (dep.type in ext_inc) or (dep.type in ext_special):
                         continue 
                     if dep not in arc: # not part of arc
@@ -246,13 +246,12 @@ class NgramBuilder(object):
             for sent in sentences:
                 if sent[0][1].startswith(u"####FIPBANK"): continue # skip parsebank markers
                 if len(sent)==1 and sent[0][1]==u"": continue # skip whitespace sentences
-                #try:
-                #print u" ".join(tok[1] for tok in sent)
-                self.process_sentence(sent)
-                #except:
-                #    print >> sys.stderr, "error in processing sentence"
-                #    traceback.print_exc()
-                #    sys.stderr.flush()
+                try:
+                    self.process_sentence(sent)
+                except:
+                    print >> sys.stderr, "error in processing sentence"
+                    traceback.print_exc()
+                    sys.stderr.flush()
                 self.treeCounter+=1 # this is needed for unique identifiers
             for key,val in self.db_batches.iteritems():
                 if len(val)>1000:
