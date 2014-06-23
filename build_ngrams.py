@@ -28,7 +28,7 @@ def launch_ngrams(args):
     data_q=multiprocessing.Queue(args.processes*2) # max items in a queue at a time
 
     ## file reader process (just one) to populate data queue TODO: read also tar
-    reader=FileReader(data_q,50) # number of sentences per one batch
+    reader=FileReader(data_q,100) # number of sentences per one batch
     readerProcess=multiprocessing.Process(target=reader.read, args=(args.input[0],args.processes))
     readerProcess.start()
     procs.append(readerProcess)
@@ -36,7 +36,7 @@ def launch_ngrams(args):
     ## ngram queues, separate queue for each dataset
     ngram_queues={}
     for dataset in data:
-        ngram_queues[dataset]=multiprocessing.Queue(15) # max items in a queue at a time
+        ngram_queues[dataset]=multiprocessing.Queue(25) # max items in a queue at a time
 
     ## ngram builder processes (parallel)
     print >> sys.stderr, "Launching",args.processes,"ngram builder processes"

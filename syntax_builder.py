@@ -254,7 +254,7 @@ class NgramBuilder(object):
                     sys.stderr.flush()
                 self.treeCounter+=1 # this is needed for unique identifiers
             for key,val in self.db_batches.iteritems():
-                if len(val)>1000:
+                if len(val)>5000:
                     self.out_queues[key].put(val)
                     self.db_batches[key]=[]
 
