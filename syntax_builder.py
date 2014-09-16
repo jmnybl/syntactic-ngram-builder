@@ -20,13 +20,14 @@ class NgramBuilder(object):
         http://commondatastorage.googleapis.com/books/syntactic-ngrams/index.html
     """
 
-    def __init__(self,queueIN,queuesOUT,data):
+    def __init__(self,queueIN,queuesOUT,data,print_type):
         self.queueIN=queueIN
         self.out_queues=queuesOUT # dict
+        self.print_type=print_type
         self.treeCounter=0
 
 
-    def create_text_from_path(self,path,graph):
+    def create_text_from_path(self,path,graph,prefix):
         """ Create a text format ngram from given graph and path.
             Path is a list of dependencys.
         """
@@ -65,8 +66,11 @@ class NgramBuilder(object):
                 govs=u",".join(str(d[0]) for d in deps)
                 deprels=u",".join(d[1] for d in deps)
                 s=u"/".join(i for i in [text,lemma,pos,feat,deprels,govs])
-                tokens.append(s)  
-        return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999))
+                tokens.append(s)
+        if self.print_type:
+            return prefix+u"\t"+root+u"\t"+u" ".join(t for t in tokens)
+        else:
+            return root+u"\t"+u" ".join(t for t in tokens)
 
     def extended(self,path,graph):
         inc=set()
@@ -180,10 +184,10 @@ class NgramBuilder(object):
             inc,spe=self.extended(arc,graph)
             a=list(arc)+list(inc)
             a.sort()
-            ngrams.append(self.create_text_from_path(a,graph))
+            ngrams.append(self.create_text_from_path(a,graph,u"nodes"))
             a=a+list(spe)
             a.sort()
-            ext_ngrams.append(self.create_text_from_path(a,graph))
+            ext_ngrams.append(self.create_text_from_path(a,graph,u"ext_nodes"))
         self.db_batches[u"nodes"]+=ngrams
         self.db_batches[u"extended-nodes"]+=ext_ngrams
 #        for n in ngrams:
@@ -196,10 +200,10 @@ class NgramBuilder(object):
                 inc,spe=self.extended(arc,graph)
                 a=list(arc)+list(inc)
                 a.sort()
-                ngrams.append(self.create_text_from_path(a,graph))
+                ngrams.append(self.create_text_from_path(a,graph,data))
                 a=a+list(spe)
                 a.sort()
-                ext_ngrams.append(self.create_text_from_path(a,graph))
+                ext_ngrams.append(self.create_text_from_path(a,graph,u"ext_"+data))
             self.db_batches[data]+=ngrams
             self.db_batches[u"extended-"+data]+=ext_ngrams
             if data==u"triarcs": # use these to create quadarcs
@@ -211,10 +215,10 @@ class NgramBuilder(object):
                     inc,spe=self.extended(arc,graph)
                     a=list(arc)+list(inc)
                     a.sort()
-                    ngrams.append(self.create_text_from_path(a,graph))
+                    ngrams.append(self.create_text_from_path(a,graph,u"quadarcs"))
                     a=a+list(spe)
                     a.sort()
-                    ext_ngrams.append(self.create_text_from_path(a,graph))
+                    ext_ngrams.append(self.create_text_from_path(a,graph,u"ext_quadarcs"))
 #                for n in ngrams:
 #                    print n
                 self.db_batches[u"quadarcs"]+=ngrams
@@ -267,11 +271,12 @@ class ArgBuilder(object):
         - include lemma and morphology for each token
     """
 
-    def __init__(self,in_q,verb_q,noun_q):
+    def __init__(self,in_q,verb_q,noun_q,print_type):
         self.in_q=in_q
         self.form=formats[u"conll09"] # TODO define this properly
         self.verb_q=verb_q
         self.noun_q=noun_q
+        self.print_type=print_type
         self.treeCounter=0
 
 
@@ -300,7 +305,7 @@ class ArgBuilder(object):
                 govIndex=r
             s=u"/".join(i for i in [text,lemma,POS,feat,dtype,unicode(govIndex)])
             tokens.append(s)
-        return root+u"\t"+u" ".join(t for t in tokens)+u"."+unicode(self.treeCounter)+unicode(random.randint(100,999)) # unique identifier
+        return root+u"\t"+u" ".join(t for t in tokens)
 
 
 
@@ -329,8 +334,12 @@ class ArgBuilder(object):
             # now deps is a list of unique dependents populated with dependency types
             ngram=self.extract_ngram(root,deps,sent) # create text ngram
             if sent[root-1][self.form.POS]==u"V": # check where to store this one
+                if self.print_type:
+                    ngram=u"verb_arg\t"+ngram
                 v_args.append(ngram)
             else:
+                if self.print_type:
+                    ngram=u"noun_arg\t"+ngram
                 n_args.append(ngram)
         self.v_batch+=v_args
         self.n_batch+=n_args

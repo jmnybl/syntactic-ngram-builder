@@ -1,4 +1,4 @@
-import leveldb
+
 import tarfile
 import gzip
 import codecs
@@ -8,6 +8,11 @@ import sys
 import os.path
 import glob
 import subprocess # needed for pigz
+
+try:
+    import leveldb
+except:
+    print >> sys.stderr, "LevelDB not installed, cannot use DBWriter."
 
 class TarReader(object):
 
@@ -184,4 +189,45 @@ class DBWriter(object):
                 f.write((last+u"\t"+unicode(count)+u"\t2014,"+unicode(count)+u"\n").encode(u"utf-8")) # write last one  
         f.close()
         return totalCounter
+
+class FileWriter(object):
+
+    def __init__(self,queue,out_dir,dataset):
+        self.dataset=dataset
+        self.queue=queue
+        self.outdir=out_dir
+        self.file_out=codecs.getwriter("utf-8")(gzip.open(self.outdir+u"/"+dataset+u".txt.gz","w"))
+
+
+    def run(self):
+        while True:
+            ngram_list=self.queue.get() # fetch new batch
+            if not ngram_list: # end signal
+                print >> sys.stderr, "no new data in "+self.dataset
+                sys.stderr.flush()
+                self.file_out.close()
+                return
+            try:
+                for ngram in ngram_list:
+                    print >> self.file_out, ngram
+            except:
+                print >> sys.stderr, "error in file writer, batch rejected: "+self.dataset
+                traceback.print_exc()
+                sys.stderr.flush()
+
+
+class StdoutWriter(object):
+
+    def __init__(self,queue):
+        self.queue=queue
+
+    def run(self):
+        while True:
+            ngram_list=self.queue.get() # fetch new batch
+            if not ngram_list: # end signal (None)
+                return
+            for ngram in ngram_list:
+                print >> sys.stdout, ngram
+            sys.stdout.flush()
+
 
