@@ -63,10 +63,12 @@ class FileReader(object):
         """ inp can be one file or directory with multiple files. """
         if os.path.isdir(inp): # inp is directory
             files=glob.glob(os.path.join(inp,"*.gz"))
+            files+=glob.glob(os.path.join(inp,"*.conll09"))
+            files+=glob.glob(os.path.join(inp,"*.conll"))
             files.sort()
             for fName in files:
                 self.read_file(fName)
-        elif inp.endswith(u".gz") or inp.endswith(u".conll"): # inp is a gzip or conll file
+        elif inp.endswith(u".gz") or inp.endswith(u".conll") or inp.endswith(u".conll09"): # inp is a gzip or conll file
             self.read_file(inp)
         else:
             raise ValueError(u"Wrong input format.")
