@@ -15,6 +15,6 @@ The input can be either a file or a directory containing multiple files. Files m
 
 # Sorting and counting n-grams
 
-    .\sort output_directory
+    ./sort.sh output_directory
     
-The n-grams produced by the software are not unique. Thus, a separate step to sort and count the n-grams is needed. If you have a lot of data to sort and a powerful machine (more than 50G of memory and 20 cores), you can also use the optimized version of the sort script (`.\fast_sort out_dir`). For more information about the optimized sort, see https://gist.github.com/fginter/2d4662faeef79acdb772.
+The n-grams produced by the software are not unique. Thus, a separate step to sort and count the n-grams is needed. If you have a lot of data to sort and a powerful machine (more than 50G of memory and 20 cores), you can also use the optimized version of the sort script (`./fast_sort.sh out_dir`). For more information about the optimized sort, see https://gist.github.com/fginter/2d4662faeef79acdb772.
