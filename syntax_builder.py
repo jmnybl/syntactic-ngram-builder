@@ -24,7 +24,6 @@ class NgramBuilder(object):
         self.queueIN=queueIN
         self.out_queues=queuesOUT # dict
         self.print_type=print_type
-        self.treeCounter=0
 
 
     def create_text_from_path(self,path,graph,prefix):
@@ -91,6 +90,7 @@ class NgramBuilder(object):
                                     break
                         else:
                             inc.add(d)
+        assert not inc and not spe ###FG
         return inc,spe
 
 
@@ -125,8 +125,6 @@ class NgramBuilder(object):
                 # try to attach one dependency which is not part of arc
                 dependencies=graph.deps[tok] # all dependents of this particular token
                 for dep in dependencies:
-                    if (dep.type in ext_zero) or (dep.type in ext_inc) or (dep.type in ext_special):
-                        continue 
                     if dep not in arc: # not part of arc
                         new_arc=arc[:]
                         new_arc.append(dep)
@@ -175,57 +173,25 @@ class NgramBuilder(object):
                 arcs.add(tuple(l))
             else:
                 for d in types:
-                    if (d.type in ext_zero) or (d.type in ext_inc) or (d.type in ext_special): continue # filter out if dtype is one of those functional markers...
                     l=[Dependency(-1,idx,d.type)]
                     arcs.add(tuple(l))
         ngrams=[]
-        ext_ngrams=[]
-        for arc in arcs: # nodes
-            inc,spe=self.extended(arc,graph)
-            a=list(arc)+list(inc)
-            a.sort()
-            ngrams.append(self.create_text_from_path(a,graph,u"nodes"))
-            a=a+list(spe)
-            a.sort()
-            ext_ngrams.append(self.create_text_from_path(a,graph,u"ext_nodes"))
+        for arc in arcs:
+            ngrams.append(self.create_text_from_path(list(arc),graph,u"nodes"))
         self.db_batches[u"nodes"]+=ngrams
-        self.db_batches[u"extended-nodes"]+=ext_ngrams
-#        for n in ngrams:
-#            print "node:", n
-        for data in [u"arcs",u"biarcs",u"triarcs"]: # arcs---quadarcs
+        for data in [u"arcs",u"biarcs",u"triarcs"]: # arcs---triarcs
             ngrams=[]
-            ext_ngrams=[]
             arcs=self.expand_by_one(arcs,graph)
             for arc in arcs:
-                inc,spe=self.extended(arc,graph)
-                a=list(arc)+list(inc)
-                a.sort()
-                ngrams.append(self.create_text_from_path(a,graph,data))
-                a=a+list(spe)
-                a.sort()
-                ext_ngrams.append(self.create_text_from_path(a,graph,u"ext_"+data))
+                ngrams.append(self.create_text_from_path(list(arc),graph,data))
             self.db_batches[data]+=ngrams
-            self.db_batches[u"extended-"+data]+=ext_ngrams
-            if data==u"triarcs": # use these to create quadarcs
-                filtered=self.filter_triarcs(arcs)
-                quadarcs=self.create_quadarcs(filtered,graph)
-                ngrams=[]
-                ext_ngrams=[]
-                for arc in quadarcs:
-                    inc,spe=self.extended(arc,graph)
-                    a=list(arc)+list(inc)
-                    a.sort()
-                    ngrams.append(self.create_text_from_path(a,graph,u"quadarcs"))
-                    a=a+list(spe)
-                    a.sort()
-                    ext_ngrams.append(self.create_text_from_path(a,graph,u"ext_quadarcs"))
-#                for n in ngrams:
-#                    print n
-                self.db_batches[u"quadarcs"]+=ngrams
-                self.db_batches[u"extended-quadarcs"]+=ext_ngrams
-#            for n in ngrams:
-#                print data, n
-        
+#            if data==u"triarcs": # use these to create quadarcs
+#                filtered=self.filter_triarcs(arcs)
+#                quadarcs=self.create_quadarcs(filtered,graph)
+#                ngrams=[]
+#                for arc in quadarcs:
+#                    ngrams.append(self.create_text_from_path(list(arc).sort(),graph,u"quadarcs"))
+#                self.db_batches[u"quadarcs"]+=ngrams
 
 
 
@@ -235,12 +201,16 @@ class NgramBuilder(object):
         self.buildNgrams(graph) # create nodes--quadarcs
 
 
-    def run(self):
+    def run(self,idx):
         self.db_batches={} # key:dataset, value: list of ngrams
-        for d in u"nodes arcs biarcs triarcs quadarcs extended-nodes extended-arcs extended-biarcs extended-triarcs extended-quadarcs".split():
+        for d in u"nodes arcs biarcs triarcs".split(): # quadarcs extended-nodes extended-arcs extended-biarcs extended-triarcs extended-quadarcs".split():
             self.db_batches[d]=[]
+        counter=0
         while True:
             sentences=self.queueIN.get() # fetch a list of sentences from queue
+            counter+=1
+            if counter%100==0:
+                print >> sys.stderr, idx, "batches:",counter
             if not sentences: # end signal
                 for key,val in self.db_batches.iteritems(): # send last batches
                     if val:
@@ -256,11 +226,11 @@ class NgramBuilder(object):
                     print >> sys.stderr, "error in processing sentence"
                     traceback.print_exc()
                     sys.stderr.flush()
-                self.treeCounter+=1 # this is needed for unique identifiers
-            for key,val in self.db_batches.iteritems():
-                if len(val)>5000:
-                    self.out_queues[key].put(val)
-                    self.db_batches[key]=[]
+                for key,val in self.db_batches.iteritems():
+                    if len(val)>100:
+                        self.out_queues[key].put(val[:])
+                        val[:]=[]
+                        #self.db_batches[key]=[]
 
 
 class ArgBuilder(object):

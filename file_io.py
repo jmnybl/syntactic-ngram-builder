@@ -9,10 +9,31 @@ import os.path
 import glob
 import subprocess # needed for pigz
 
+
+
+
 try:
     import leveldb
 except:
     print >> sys.stderr, "LevelDB not installed, cannot use DBWriter."
+
+
+def read_conll(f):
+    """ Reads conll and yields one sentence at a time. """
+    # TODO skip parsebank identifiers!
+    sent=[]
+    for line in f:
+        line=line.strip()
+        if not line or line.startswith(u"#"): #Do not rely on empty lines in conll files, ignore comments
+            continue 
+        if line.startswith(u"1\t") and sent: #New sentence, and I have an old one to yield
+            yield sent
+            sent=[]
+        sent.append(line.split(u"\t"))
+    else:
+        if sent:
+            yield sent
+
 
 class TarReader(object):
 
@@ -70,6 +91,7 @@ class FileReader(object):
                 self.read_file(fName)
         elif inp.endswith(u".gz") or inp.endswith(u".conll") or inp.endswith(u".conll09"): # inp is a gzip or conll file
             self.read_file(inp)
+
         else:
             raise ValueError(u"Wrong input format.")
         #Signal end of work to all processes (Thanks @radimrehurek and @fginter for this neat trick!)
@@ -94,7 +116,7 @@ class FileReader(object):
         else:
             f=codecs.open(fName,u"rt",u"utf-8")
         sentences=[]
-        for sent in self.read_conll(f):
+        for sent in read_conll(f):
             sentences.append(sent)
             self.totalCount+=1
             if len(sentences)>self.batch_size:
@@ -106,22 +128,6 @@ class FileReader(object):
         f.close()
         
 
-
-    def read_conll(self,f):
-        """ Reads conll and yields one sentence at a time. """
-        # TODO skip parsebank identifiers!
-        sent=[]
-        for line in f:
-            line=line.strip()
-            if not line or line.startswith(u"#"): #Do not rely on empty lines in conll files, ignore comments
-                continue 
-            if line.startswith(u"1\t") and sent: #New sentence, and I have an old one to yield
-                yield sent
-                sent=[]
-            sent.append(line.split(u"\t"))
-        else:
-            if sent:
-                yield sent
 
 
 class DBWriter(object):
@@ -211,7 +217,8 @@ class FileWriter(object):
                 return
             try:
                 for ngram in ngram_list:
-                    print >> self.file_out, ngram
+                    #print >> self.file_out, ngram
+                    self.file_out.write(ngram+u"\n")
             except:
                 print >> sys.stderr, "error in file writer, batch rejected: "+self.dataset
                 traceback.print_exc()
@@ -229,7 +236,7 @@ class StdoutWriter(object):
             if not ngram_list: # end signal (None)
                 return
             for ngram in ngram_list:
-                print >> sys.stdout, ngram
+                print >> sys.stdout, ngram.encode(u"utf-8")
             sys.stdout.flush()
 
 

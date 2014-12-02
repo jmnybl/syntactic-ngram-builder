@@ -1,13 +1,21 @@
 from collections import namedtuple,defaultdict
+import sys
+import re
 
 # extended types
-ext_zero=u"prep".split() ## we don't have these in Finnish
-ext_inc=u"cc adpos".split() ## adpos is always included because it's the Finnish version of prep
-ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
+##ext_zero=u"prep".split() ## we don't have these in Finnish # TODO
+##ext_inc=u"cc adpos".split() ## adpos is always included because it's the Finnish version of prep
+##ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
+
+ext_zero=[] ## we don't have these in Finnish
+ext_inc=[] ## adpos is always included because it's the Finnish version of prep
+ext_special=[]
 
 CoNLLFormat=namedtuple("CoNLLFormat",["ID","FORM","LEMMA","POS","FEAT","HEAD","DEPREL"])
 #Column lists for the various formats
 formats={"conll09":CoNLLFormat(0,1,2,4,6,8,10)}
+
+regex=re.compile(u"[A-Za-z]+$")
 
 class Dependency(object):
     """ Simple class to represent dependency. """
@@ -53,6 +61,8 @@ class Graph(object):
         """ This is the way to create graphs! """
         g=cls()
         form=formats[conll_format] #named tuple with the column indices
+        root_idx=None
+        deps=defaultdict(lambda:set())
         for line in sent:
             token=line[form.FORM].lower() # lowercase everything
             g.addNode(token,(line[form.LEMMA],line[form.POS],line[form.FEAT])) # create a node to represent this token, store also pos, lemma and feat
@@ -60,8 +70,26 @@ class Graph(object):
             deprels=line[form.DEPREL].split(u",") # dependency types
             for gov,deprel in zip(govs,deprels):
                 if int(gov)==0:
+                    if root_idx is None:
+                        root_idx=int(line[form.ID])
+                    else: # second root, dep these together!
+                        if len(token)<4 and not regex.match(token) and (token,u"dep") in deps[root_idx-1]: # I already have similar token
+#                            print >> sys.stderr, "suspicious token:",token,regex.match(token)
+##                            for t in sent:
+##                                print >> sys.stderr, u"\t".join(i for i in t)
+##                            print >> sys.stderr
+                            continue
+                        g.addEdge(root_idx-1,int(line[form.ID])-1,u"dep") # TODO remove '-1'
+                        deps[root_idx-1].add((token,u"dep"))
+                    continue
+                if len(token)<4 and not regex.match(token) and (token,deprel) in deps[int(gov)-1]: # I already have similar token
+#                    print >> sys.stderr, "suspicious token:",token,regex.match(token)
+##                    for t in sent:
+##                        print >> sys.stderr, u"\t".join(i for i in t)
+##                    print >> sys.stderr
                     continue
                 g.addEdge(int(gov)-1,int(line[form.ID])-1,deprel) # TODO remove '-1'
+                deps[int(gov)-1].add((token,deprel))
         return g
 
     def __init__(self):
