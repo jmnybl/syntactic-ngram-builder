@@ -2,8 +2,9 @@ from collections import namedtuple,defaultdict
 
 # extended types
 ext_zero=u"prep".split() ## we don't have these in Finnish
-ext_inc=u"cc adpos".split() ## adpos is always included because it's the Finnish version of prep
-ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
+ext_inc=u"cc adpos case goeswith mwe cc:preconj preconj".split() ## adpos is always included because it's the Finnish version of prep
+#ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
+ext_special=u"det ps complm prt neg aux auxpass mark compound:prt punct".split()
 
 CoNLLFormat=namedtuple("CoNLLFormat",["ID","FORM","LEMMA","POS","FEAT","HEAD","DEPREL"])
 #Column lists for the various formats

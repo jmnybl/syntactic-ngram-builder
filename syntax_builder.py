@@ -84,7 +84,7 @@ class NgramBuilder(object):
                     if (d.type in ext_special): # this is something new plus extended
                         spe.add(d)
                     if (d.type in ext_inc):
-                        if d.type==u"cc": # include cc only if conj is present
+                        if d.type in (u"cc",u"preconj",u"cc:preconj"): # include cc only if conj is present
                             for d2 in deps: # cc and conj must have the same governor...
                                 if d2.type==u"conj" and d2.dep in tokens:
                                     inc.add(d)
