@@ -65,10 +65,11 @@ class FileReader(object):
             files=glob.glob(os.path.join(inp,"*.gz"))
             files+=glob.glob(os.path.join(inp,"*.conll09"))
             files+=glob.glob(os.path.join(inp,"*.conll"))
+            files+=glob.glob(os.path.join(inp,"*.conllu"))
             files.sort()
             for fName in files:
                 self.read_file(fName)
-        elif inp.endswith(u".gz") or inp.endswith(u".conll") or inp.endswith(u".conll09"): # inp is a gzip or conll file
+        elif inp.endswith(u".gz") or inp.endswith(u".conll") or inp.endswith(u".conll09") or inp.endswith(u".conllu"): # inp is a gzip or conll file
             self.read_file(inp)
         else:
             raise ValueError(u"Wrong input format.")
@@ -118,7 +119,9 @@ class FileReader(object):
             if line.startswith(u"1\t") and sent: #New sentence, and I have an old one to yield
                 yield sent
                 sent=[]
-            sent.append(line.split(u"\t"))
+            cols=line.split(u"\t")
+            if cols[0].isdigit(): #skips token lines in conllu
+                sent.append(cols)
         else:
             if sent:
                 yield sent

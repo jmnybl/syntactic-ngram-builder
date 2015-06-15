@@ -273,7 +273,7 @@ class ArgBuilder(object):
 
     def __init__(self,in_q,verb_q,noun_q,print_type):
         self.in_q=in_q
-        self.form=formats[u"conll09"] # TODO define this properly
+        self.form=formats[u"conllu"] # TODO define this properly
         self.verb_q=verb_q
         self.noun_q=noun_q
         self.print_type=print_type
@@ -322,7 +322,7 @@ class ArgBuilder(object):
                 gov=int(gov)
                 if gov==0: # skip root
                     continue
-                if sent[gov-1][self.form.POS]==u"V" or sent[gov-1][self.form.POS]==u"N": # yes, we want this one
+                if sent[gov-1][self.form.POS] in (u"V",u"N",u"VERB",u"NOUN"): # yes, we want this one
                     tree[gov].append((tok,deprel))
         # now we need to take care of cases where the verb has same dependents listed there twice with different dtype (e.g. rels)
         for root,dependents in tree.iteritems():
@@ -333,7 +333,7 @@ class ArgBuilder(object):
                 deps.append((dep,dtypes))
             # now deps is a list of unique dependents populated with dependency types
             ngram=self.extract_ngram(root,deps,sent) # create text ngram
-            if sent[root-1][self.form.POS]==u"V": # check where to store this one
+            if sent[root-1][self.form.POS] in (u"V",u"VERB"): # check where to store this one
                 if self.print_type:
                     ngram=u"verb_arg\t"+ngram
                 v_args.append(ngram)

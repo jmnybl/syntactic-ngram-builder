@@ -6,9 +6,12 @@ ext_inc=u"cc adpos case goeswith mwe cc:preconj preconj".split() ## adpos is alw
 #ext_special=u"det poss neg aux auxpass ps mark complm prt".split()
 ext_special=u"det ps complm prt neg aux auxpass mark compound:prt punct".split()
 
-CoNLLFormat=namedtuple("CoNLLFormat",["ID","FORM","LEMMA","POS","FEAT","HEAD","DEPREL"])
+CoNLLFormat=namedtuple("CoNLLFormat",["ID","FORM","LEMMA","POS","FEAT","HEAD","DEPREL","DEPS"])
 #Column lists for the various formats
-formats={"conll09":CoNLLFormat(0,1,2,4,6,8,10)}
+formats={"conll09":CoNLLFormat(0,1,2,4,6,8,10,None),"conllu":CoNLLFormat(0,1,2,3,5,6,7,8)}
+
+# 0  1    2     3    4    5   6    7      8    9
+#id form lemma cpos pos feat head deprel deps misc
 
 class Dependency(object):
     """ Simple class to represent dependency. """
@@ -50,19 +53,28 @@ class Graph(object):
         return g
 
     @classmethod
-    def create(cls,sent,conll_format="conll09"): 
+    def create(cls,sent,conll_format="conllu"): 
         """ This is the way to create graphs! """
         g=cls()
         form=formats[conll_format] #named tuple with the column indices
         for line in sent:
             token=line[form.FORM].lower() # lowercase everything
             g.addNode(token,(line[form.LEMMA],line[form.POS],line[form.FEAT])) # create a node to represent this token, store also pos, lemma and feat
-            govs=line[form.HEAD].split(u",")
-            deprels=line[form.DEPREL].split(u",") # dependency types
-            for gov,deprel in zip(govs,deprels):
-                if int(gov)==0:
-                    continue
-                g.addEdge(int(gov)-1,int(line[form.ID])-1,deprel) # TODO remove '-1'
+            if conll_format=="conll09":
+                govs=line[form.HEAD].split(u",")
+                deprels=line[form.DEPREL].split(u",") # dependency types
+                for gov,deprel in zip(govs,deprels):
+                    if int(gov)==0:
+                        continue
+                    g.addEdge(int(gov)-1,int(line[form.ID])-1,deprel) # TODO remove '-1'
+            elif conll_format=="conllu":
+                if int(line[form.HEAD])!=0:
+                    g.addEdge(int(line[form.HEAD])-1,int(line[form.ID])-1,line[form.DEPREL])
+                if line[form.DEPS]!=u"_":
+                    for gov_drel in line[form.DEPS].split(u"|"):
+                        gov,drel=gov_drel.split(u":",1)
+                        if int(gov)!=0:
+                            g.addEdge(int(gov)-1,int(line[form.ID])-1,drel)
         return g
 
     def __init__(self):
