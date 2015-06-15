@@ -60,7 +60,7 @@ class NgramBuilder(object):
                 last=tok.dep
             deps.append((govIndex,tok.type))
         else:
-            if last:
+            if last is not None:
                 text,morpho=graph.giveNode(last)
                 lemma,pos,feat=morpho
                 govs=u",".join(str(d[0]) for d in deps)
