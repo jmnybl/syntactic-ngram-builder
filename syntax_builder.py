@@ -318,6 +318,11 @@ class ArgBuilder(object):
             tok=int(line[self.form.ID])
             govs=line[self.form.HEAD].split(u",") # this is for second layer
             deprels=line[self.form.DEPREL].split(u",")
+            if self.form.DEPS is not None and line[self.form.DEPS]!=u"_": #conllu DEPS field handling
+                for gov_deprel in line[self.form.DEPS].split(u"|"):
+                    gov,deprel=gov_deprel.split(u":",1)
+                    govs.append(gov)
+                    deprels.append(deprel)
             for gov,deprel in zip(govs,deprels):
                 gov=int(gov)
                 if gov==0: # skip root
