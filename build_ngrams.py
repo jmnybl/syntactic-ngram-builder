@@ -22,7 +22,7 @@ def launch_ngrams(args):
     data_q=multiprocessing.Queue(args.processes*2) # max items in a queue at a time
 
     ## file reader process (just one) to populate data queue
-    reader=FileReader(data_q,100) # number of sentences per one batch
+    reader=FileReader(data_q,100,args.max_sent_len) # number of sentences per one batch
     readerProcess=multiprocessing.Process(target=reader.read, args=(args.input[0],args.processes))
     readerProcess.start()
     procs.append(readerProcess)
@@ -91,7 +91,7 @@ def launch_args(args):
     data_q=multiprocessing.Queue(args.processes*2) # max items in a queue at a time
 
     ## file reader process (just one) to populate data queue
-    reader=FileReader(data_q,50) # number of sentences per one batch
+    reader=FileReader(data_q,50,args.max_sent_len) # number of sentences per one batch
     readerProcess=multiprocessing.Process(target=reader.read, args=(args.input[0],args.processes))
     readerProcess.start()
     procs.append(readerProcess)
@@ -159,6 +159,7 @@ if __name__==u"__main__":
     g=parser.add_mutually_exclusive_group(required=True)
     g.add_argument('--out_dir', help='Print ngrams to .gz files, give the name of the output directory, where .gz files get written. Mutually exclusive with --stdout.')
     g.add_argument('--stdout', action='store_true', help='Print ngrams to stdout. Mutually exclusive with --out_dir.')
+    g.add_argument('--max-sent-len', action='store', type=int, default=256, help='Skip sentences longer than this (prevents memory excursions on extremely long trees). (default %(default)d)')
     
     args = parser.parse_args()
 

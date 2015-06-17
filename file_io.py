@@ -54,10 +54,11 @@ class TarReader(object):
 
 class FileReader(object):
 
-    def __init__(self,queue,batch_size):
+    def __init__(self,queue,batch_size,max_sent_len=0):
         self.queue=queue
         self.batch_size=batch_size
         self.totalCount=0
+        self.max_sent_len=max_sent_len #maximum sentence length, zero for no limit
 
     def read(self,inp,processes):
         """ inp can be one file or directory with multiple files. """
@@ -96,6 +97,8 @@ class FileReader(object):
             f=codecs.open(fName,u"rt",u"utf-8")
         sentences=[]
         for sent in self.read_conll(f):
+            if self.max_sent_len>0 and len(sent)>self.max_sent_len:
+                continue
             sentences.append(sent)
             self.totalCount+=1
             if len(sentences)>self.batch_size:
