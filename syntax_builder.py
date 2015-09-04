@@ -10,7 +10,8 @@ import sys
 import cStringIO as stringIO
 import gzip
 
-from graph import Graph,ext_zero,ext_inc,ext_special,Dependency
+from graph import Graph,Dependency
+from config import ext_zero,ext_inc,ext_special,coords,coord_conjs
 from graph import CoNLLFormat, formats
 
 
@@ -84,9 +85,9 @@ class NgramBuilder(object):
                     if (d.type in ext_special): # this is something new plus extended
                         spe.add(d)
                     if (d.type in ext_inc):
-                        if d.type in (u"cc",u"preconj",u"cc:preconj"): # include cc only if conj is present
+                        if d.type in coord_conjs: # include cc only if conj is present
                             for d2 in deps: # cc and conj must have the same governor...
-                                if d2.type==u"conj" and d2.dep in tokens:
+                                if d2.type in coords and d2.dep in tokens:
                                     inc.add(d)
                                     break
                         else:
@@ -229,9 +230,9 @@ class NgramBuilder(object):
 
 
 
-    def process_sentence(self,sent):
+    def process_sentence(self,sent,format=u"conllu"):
         """ Create ngrams from one sentence. """
-        graph=Graph.create(sent) # create new graph representation
+        graph=Graph.create(sent,format) # create new graph representation
         self.buildNgrams(graph) # create nodes--quadarcs
 
 
